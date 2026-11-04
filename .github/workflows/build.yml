@@ -25,11 +25,21 @@ jobs:
 
       - name: Build
         run: |
-          export OPENSSL_PREFIX="$(brew --prefix openssl@3)"
-          export LIBPLIST_PREFIX="$(brew --prefix libplist)"
-          export DFLAGS="-L-L${OPENSSL_PREFIX}/lib -L-L${LIBPLIST_PREFIX}/lib"
-          export PKG_CONFIG_PATH="${OPENSSL_PREFIX}/lib/pkgconfig:${LIBPLIST_PREFIX}/lib/pkgconfig"
-          dub build -b release --compiler=ldc2
+          OPENSSL_PREFIX="$(brew --prefix openssl@3)"
+          LIBPLIST_PREFIX="$(brew --prefix libplist)"
+          echo "OpenSSL: $OPENSSL_PREFIX"; ls "$OPENSSL_PREFIX/lib" | grep -E 'libssl|libcrypto'
+
+          # Put the Homebrew lib dirs on the link line explicitly
+          python3 - "$OPENSSL_PREFIX" "$LIBPLIST_PREFIX" <<'EOF'
+          import json, sys
+          ssl, plist = sys.argv[1], sys.argv[2]
+          d = json.load(open("dub.json"))
+          d["lflags"] = [f"-L{ssl}/lib", f"-L{plist}/lib"]
+          json.dump(d, open("dub.json", "w"), indent=2)
+          EOF
+
+          dub build -b release --compiler=ldc2 -v 2>&1 | grep -E "^(Linking|.*-L/)|Undefined|error|Error" || true
+          test -f anisette-v3-server
           file anisette-v3-server
           otool -L anisette-v3-server
 
