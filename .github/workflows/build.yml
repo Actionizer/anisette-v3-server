@@ -1,0 +1,54 @@
+name: Build anisette-v3-server (macOS)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest        # Apple Silicon (arm64)
+            arch: arm64
+          - runner: macos-15-intel      # Intel (x86_64); remove if you don't need it
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out upstream source
+        uses: actions/checkout@v4
+
+      - name: Install toolchain and libraries
+        run: brew install ldc dub openssl@3 libplist
+
+      - name: Build
+        run: |
+          export LIBRARY_PATH="$(brew --prefix openssl@3)/lib:$(brew --prefix libplist)/lib:$LIBRARY_PATH"
+          export PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH"
+          dub build -b release --compiler=ldc2
+          file anisette-v3-server
+          otool -L anisette-v3-server
+
+      - name: Smoke test (--help)
+        run: ./anisette-v3-server --help
+
+      # Downloads Apple's Android libraries and attempts provisioning.
+      # This shows whether the ELF loader works on macOS. It may fail
+      # without meaning the build is bad, so it doesn't fail the job.
+      - name: Smoke test (initial provisioning)
+        continue-on-error: true
+        run: |
+          ./anisette-v3-server --skip-server-startup --adi-path "$RUNNER_TEMP/anisette"
+
+      - name: Package
+        run: |
+          shasum -a 256 anisette-v3-server | tee anisette-v3-server.sha256
+          tar czf anisette-v3-server-macos-${{ matrix.arch }}.tar.gz anisette-v3-server anisette-v3-server.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anisette-v3-server-macos-${{ matrix.arch }}
+          path: anisette-v3-server-macos-${{ matrix.arch }}.tar.gz
