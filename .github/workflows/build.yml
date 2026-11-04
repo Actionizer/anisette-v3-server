@@ -25,9 +25,14 @@ jobs:
 
       - name: Build
         run: |
-          export LIBRARY_PATH="$(brew --prefix openssl@3)/lib:$(brew --prefix libplist)/lib:$LIBRARY_PATH"
-          export PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH"
-          dub build -b release --compiler=ldc2
+          export OPENSSL_PREFIX="$(brew --prefix openssl@3)"
+          export LIBPLIST_PREFIX="$(brew --prefix libplist)"
+          export CPPFLAGS="-I${OPENSSL_PREFIX}/include -I${LIBPLIST_PREFIX}/include"
+          export LDFLAGS="-L${OPENSSL_PREFIX}/lib -L${LIBPLIST_PREFIX}/lib"
+          export LIBRARY_PATH="${OPENSSL_PREFIX}/lib:${LIBPLIST_PREFIX}/lib:${LIBRARY_PATH:-}"
+          export PKG_CONFIG_PATH="${OPENSSL_PREFIX}/lib/pkgconfig:${LIBPLIST_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+
+          dub build -b release --compiler=ldc2 --arch=${{ matrix.arch }}
           file anisette-v3-server
           otool -L anisette-v3-server
 
